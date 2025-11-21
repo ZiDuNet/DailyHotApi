@@ -451,4 +451,24 @@ export type RouterType = {
     pic?: string;
     source?: string;
   };
+  "mfa-wsrc": {
+    id: number;
+    title: string;
+    content?: string;
+    url: string;
+    mobileUrl: string;
+    timestamp: number | undefined;
+    hot?: number | undefined;
+    cover?: string;
+    author?: string;
+    eventDate?: string;
+    location?: string;
+  };
+  "people-rmb": {
+    id: string;
+    title: string;
+    url: string;
+    time?: string;
+    source?: string;
+  };
 };

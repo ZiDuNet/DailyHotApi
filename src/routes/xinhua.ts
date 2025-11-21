@@ -3,6 +3,7 @@ import type { RouterType } from "../router.types.js";
 import { load } from "cheerio";
 import { get } from "../utils/getData.js";
 import { getTime } from "../utils/getTime.js";
+import { config } from "../config.js";
 
 const typeMap: Record<string, string> = {
   world: "国际新闻",
@@ -22,7 +23,8 @@ const urlMap: Record<string, string> = {
 
 export const handleRoute = async (c: ListContext, noCache: boolean) => {
   const type = c.req.query("type") || "world";
-  const listData = await getList({ type }, noCache);
+  const days = c.req.query("days") || "today"; // 默认只显示今天的
+  const listData = await getList({ type, days }, noCache);
   const routeData: RouterData = {
     name: "xinhua",
     title: "新华网",
@@ -31,6 +33,15 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
       type: {
         name: "新闻分类",
         type: typeMap,
+      },
+      days: {
+        name: "时间范围",
+        type: {
+          "today": "今天",
+          "3": "近三天",
+          "7": "近一周",
+          "30": "近一月",
+        },
       },
     },
     link: urlMap[type] || urlMap.world,
@@ -41,12 +52,11 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 };
 
 // 获取新闻详情页内容和时间
-const getNewsContent = async (url: string): Promise<{ content: string; time?: string }> => {
+const getNewsContent = async (url: string, noCache: boolean = false): Promise<{ content: string; time?: string }> => {
   try {
     const result = await get({
       url,
-      noCache: true,
-      ttl: 3600,
+      noCache, // 和列表页面保持一致的缓存逻辑
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
       },
@@ -92,7 +102,7 @@ const getNewsContent = async (url: string): Promise<{ content: string; time?: st
     if (content === "暂无正文内容") {
       const paragraphs = $("p").toArray().map(p => $(p).text().trim()).filter(text => text.length > 20);
       if (paragraphs.length > 0) {
-        content = paragraphs.slice(0, 3).join(' ').substring(0, 500) + (paragraphs.join(' ').length > 500 ? '...' : '');
+        content = paragraphs.slice(0, 3).join(' ').substring(0, 500) + (paragraphs.join(' ').length > 1000 ? '...' : '');
       }
     }
 
@@ -103,23 +113,49 @@ const getNewsContent = async (url: string): Promise<{ content: string; time?: st
   }
 };
 
-// 判断是否为今天的日期 - 支持多种格式和URL中的日期
-const isToday = (dateStr: string, url?: string): boolean => {
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const todayCompact = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+// 判断日期是否在指定范围内
+const isDateInRange = (dateStr: string, url?: string, days: string = "today"): boolean => {
+  if (!dateStr && !url) {
+    return true; // 如果都没有信息，默认通过
+  }
 
-  // 1. 检查URL中是否包含今天的日期 (如: /20251121/)
-  if (url && url.includes(todayCompact)) {
+  const now = new Date();
+  let targetDate: Date;
+
+  // 根据days参数确定目标日期范围
+  switch (days) {
+    case "today":
+      targetDate = now;
+      break;
+    case "3":
+      targetDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+      break;
+    case "7":
+      targetDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      break;
+    case "30":
+      targetDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      break;
+    default:
+      // 如果是数字，按天计算
+      const daysNum = parseInt(days);
+      if (!isNaN(daysNum) && daysNum > 0) {
+        targetDate = new Date(now.getTime() - daysNum * 24 * 60 * 60 * 1000);
+      } else {
+        targetDate = now;
+      }
+  }
+
+  const targetStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+  const targetCompact = `${targetDate.getFullYear()}${String(targetDate.getMonth() + 1).padStart(2, '0')}${String(targetDate.getDate()).padStart(2, '0')}`;
+
+  // 1. 检查URL中是否包含目标日期 (如: /20251121/)
+  if (url && url.includes(targetCompact)) {
     return true;
   }
 
-  if (!dateStr) {
-    return false;
-  }
-
-  // 2. 检查日期字符串中是否包含今天的日期
-  if (dateStr.includes(todayCompact)) {
+  // 2. 检查日期字符串中是否包含目标日期
+  if (dateStr.includes(targetCompact)) {
     return true;
   }
 
@@ -127,21 +163,22 @@ const isToday = (dateStr: string, url?: string): boolean => {
   if (dateStr.includes('-')) {
     // 处理 YYYY-MM-DD HH:MM:SS 格式
     const datePart = dateStr.split(' ')[0];
-    return datePart === todayStr;
+    return datePart === targetStr;
   } else if (dateStr.includes('/')) {
     // 处理 YYYY/MM/DD HH:MM:SS 格式
     const datePart = dateStr.split(' ')[0];
     const [year, month, day] = datePart.split('/');
     const formatted = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    return formatted === todayStr;
+    return formatted === targetStr;
   }
 
   return false;
 };
 
 const getList = async (options: Options, noCache: boolean): Promise<RouterResType> => {
-  const { type } = options;
+  const { type, days = "today" } = options;
   const url = urlMap[type as string] || urlMap.world;
+
   const result = await get({
     url,
     noCache,
@@ -169,7 +206,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
   $("#list.list").each((_, listElement) => {
     const $listContainer = $(listElement);
 
-    console.log(`找到新闻列表容器，包含 ${$listContainer.find("div.item, div[class*='item']").length} 个item元素`);
+    //console.log(`找到新闻列表容器，包含 ${$listContainer.find("div.item, div[class*='item']").length} 个item元素`);
 
     // 查找新闻项 - 匹配 .item.item-style1 和 .item.item-style2
     $listContainer.find("div.item, div[class*='item']").each((index, element) => {
@@ -177,7 +214,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
 
       // 检查是否有内容，跳过空的div占位符
       const elementText = $element.text().trim();
-      console.log(`第${index + 1}个item文本长度: ${elementText.length}, 内容: ${elementText.substring(0, 50)}`);
+      //console.log(`第${index + 1}个item文本长度: ${elementText.length}, 内容: ${elementText.substring(0, 50)}`);
 
       if (elementText.length < 5) {
         return; // 跳过空的占位符
@@ -188,12 +225,12 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
       if (titleElement.length === 0) {
         titleElement = $element.find(".txt .tit span a, div.txt div.tit span a, .tit span a").first();
       }
-      console.log(`第${index + 1}个item找到的标题链接数量: ${$element.find("span a[href*='.html'], .txt .tit span a, div.txt div.tit span a, .tit span a").length}`);
+      //console.log(`第${index + 1}个item找到的标题链接数量: ${$element.find("span a[href*='.html'], .txt .tit span a, div.txt div.tit span a, .tit span a").length}`);
 
       if (titleElement.length > 0) {
         const title = titleElement.text().trim();
         const href = titleElement.attr("href");
-        console.log(`第${index + 1}个item - 标题: ${title}, 链接: ${href}`);
+       // console.log(`第${index + 1}个item - 标题: ${title}, 链接: ${href}`);
 
         if (title && href && href.includes(".html") && title.length > 5) {
           // 处理相对链接
@@ -323,7 +360,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
   const newsWithContent = await Promise.all(
     uniqueNews.map(async (item) => {
       try {
-        const { content, time: contentTime } = await getNewsContent(item.url);
+        const { content, time: contentTime } = await getNewsContent(item.url, noCache);
         return {
           ...item,
           content,
@@ -339,15 +376,61 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
     })
   );
 
-  // 按时间过滤：只返回今天的新闻 - 使用更宽松的过滤条件
-  const todayNews = newsWithContent.filter(item => {
-    return isToday(item.time || '', item.url);
+  // 按时间过滤：根据days参数过滤新闻
+  const filteredNews = newsWithContent.filter(item => {
+    // 尝试从时间字符串或URL中提取日期信息进行过滤
+    const timeString = item.time;
+
+    if (timeString) {
+      // 如果有time字符串，尝试解析并过滤
+      try {
+        const timeObj = getTime(timeString);
+        if (timeObj) {
+          const itemDate = new Date(timeObj);
+          const now = new Date();
+          let targetDate: Date;
+
+          switch (days) {
+            case "today":
+              targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              break;
+            case "3":
+              targetDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+              break;
+            case "7":
+              targetDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+              break;
+            case "30":
+              targetDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+              break;
+            default:
+              targetDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+          }
+
+          return itemDate >= targetDate;
+        }
+      } catch (error) {
+        // 如果解析失败，继续下面的逻辑
+      }
+    }
+
+    // 如果没有有效的时间字符串，使用原有的字符串过滤逻辑或URL过滤
+    return isDateInRange(timeString || '', item.url, days);
   });
 
   return {
-    updateTime: new Date(new Date().getTime() + (8 * 60 * 60 * 1000)).toISOString().replace('T', ' ').substring(0, 19),
+    updateTime: new Date().toLocaleString('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(/\//g, '-'),
     fromCache: false,
-    data: todayNews.map((v: RouterType["xinhua"] & { content?: string }) => ({
+    data: filteredNews.map((v: RouterType["xinhua"] & { content?: string }) => ({
       id: v.id,
       title: v.title,
       author: v.source,
