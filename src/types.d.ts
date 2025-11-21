@@ -11,6 +11,7 @@ export interface ListItem {
   cover?: string;
   author?: string;
   desc?: string;
+  content?: string;
   hot: number | undefined;
   timestamp: number | undefined;
   url: string;

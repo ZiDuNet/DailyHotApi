@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__filesystem__directory_tree",
+      "mcp__filesystem__read_multiple_files",
+      "mcp__fetch__fetch",
+      "Bash(npm run dev:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run)",
+      "Bash(npm run build)",
+      "Bash(taskkill:*)",
+      "Bash(nul:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

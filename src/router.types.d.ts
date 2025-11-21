@@ -443,4 +443,12 @@ export type RouterType = {
     url: string;
     mobileUrl: string;
   };
+  "xinhua": {
+    id: string;
+    title: string;
+    url: string;
+    time?: string;
+    pic?: string;
+    source?: string;
+  };
 };
