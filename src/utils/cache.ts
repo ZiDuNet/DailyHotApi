@@ -18,7 +18,7 @@ const cache = new NodeCache({
   // 克隆变量
   useClones: false,
   // 最大键值对
-  maxKeys: 100,
+  maxKeys: 1000000,
 });
 
 // init Redis client
