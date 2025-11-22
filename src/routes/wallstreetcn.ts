@@ -169,7 +169,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
           break;
         default:
           // 如果是数字，按天计算
-          const daysNum = parseInt(days);
+          const daysNum = parseInt(days as string);
           if (!isNaN(daysNum) && daysNum > 0) {
             targetDate = new Date(now.getTime() - daysNum * 24 * 60 * 60 * 1000);
           } else {

@@ -127,7 +127,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
       // 生成唯一ID
       let id = item.title || `unn_${index}`;
       if (item.guid) {
-        id = typeof item.guid === 'string' ? item.guid : item.guid.toString();
+        id = typeof item.guid === 'string' ? item.guid : String(item.guid);
       } else if (item.link) {
         // 从链接中提取ID
         const urlId = item.link.split('/').pop()?.replace(/\.[^.]*$/, '');
@@ -144,7 +144,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
         author: author,
         content: content,
         timestamp: item.pubDate ? getTime(item.pubDate) : undefined,
-        hot: undefined,
+        hot: 0, // hot字段是必需的，设置为0
         cover: undefined,
       };
     });
@@ -174,7 +174,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
           break;
         default:
           // 如果是数字，按天计算
-          const daysNum = parseInt(days);
+          const daysNum = parseInt(days as string);
           if (!isNaN(daysNum) && daysNum > 0) {
             targetDate = new Date(now.getTime() - daysNum * 24 * 60 * 60 * 1000);
           } else {
