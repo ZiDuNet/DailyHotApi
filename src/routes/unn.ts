@@ -127,7 +127,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
       // 生成唯一ID
       let id = item.title || `unn_${index}`;
       if (item.guid) {
-        id = typeof item.guid === 'string' ? item.guid : String(item.guid);
+        id = typeof item.guid === 'string' ? item.guid : (item.guid as any).toString();
       } else if (item.link) {
         // 从链接中提取ID
         const urlId = item.link.split('/').pop()?.replace(/\.[^.]*$/, '');

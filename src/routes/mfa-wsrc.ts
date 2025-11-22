@@ -383,7 +383,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
       second: '2-digit',
       hour12: false
     }).replace(/\//g, '-'),
-    data: eventsWithContent.map((v: RouterType["mfa-wsrc"]) => ({
+    data: eventsWithContent.map((v) => ({
       id: v.id,
       title: v.title,
       content: v.content,

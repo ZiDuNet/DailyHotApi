@@ -188,7 +188,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
           break;
         default:
           // 如果是数字，按天计算
-          const daysNum = parseInt(days);
+          const daysNum = parseInt(days as string);
           if (!isNaN(daysNum) && daysNum > 0) {
             targetDate = new Date(now.getTime() - daysNum * 24 * 60 * 60 * 1000);
           } else {
@@ -259,13 +259,16 @@ function extractContent(htmlContent: string): string {
     }).get().join(' ');
   }
 
+  // 确保content是字符串类型
+  const contentStr = Array.isArray(content) ? content.join(' ') : String(content);
+
   // 清理HTML标签和多余空格
-  content = content.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  const cleanedContent = contentStr.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 
   // 限制内容长度
-  if (content.length > 1000) {
-    content = content.substring(0, 1000) + '...';
+  if (cleanedContent.length > 1000) {
+    return cleanedContent.substring(0, 1000) + '...';
   }
 
-  return content || "暂无内容";
+  return cleanedContent || "暂无内容";
 }
