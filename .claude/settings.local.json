@@ -13,7 +13,12 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Bash(timeout:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:api-one-wscn.awtmt.com)",
+      "Bash(36kr.html)",
+      "Bash(powershell:*)"
     ],
     "deny": [],
     "ask": []

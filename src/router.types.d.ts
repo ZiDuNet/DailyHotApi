@@ -471,4 +471,85 @@ export type RouterType = {
     time?: string;
     source?: string;
   };
+  "unn": {
+    id: string;
+    title: string;
+    url: string;
+    mobileUrl: string;
+    author?: string;
+    content?: string;
+    timestamp: number | undefined;
+    hot?: number | undefined;
+    cover?: string;
+  };
+  "wallstreetcn": {
+    id: string;
+    title: string;
+    url: string;
+    mobileUrl: string;
+    author: string;
+    content: string;
+    timestamp: number | undefined;
+    hot?: number | undefined;
+    cover?: string;
+  };
+  "eastmoney": {
+    id: string;
+    title: string;
+    url: string;
+    mobileUrl: string;
+    author: string;
+    content: string;
+    timestamp: number | undefined;
+    hot?: number | undefined;
+    cover?: string;
+  };
+  "comnews": {
+    id: string;
+    title: string;
+    url: string;
+    mobileUrl: string;
+    author: string;
+    content: string;
+    timestamp: number | undefined;
+    hot?: number | undefined;
+    cover?: string;
+  };
+  "huanqiu": {
+    id: string;
+    title: string;
+    url: string;
+    mobileUrl: string;
+    author: string;
+    content: string;
+    timestamp: number | undefined;
+    hot?: number | undefined;
+    cover?: string;
+  };
+  "36kr-keji": {
+    itemId: number;
+    itemType: number;
+    templateMaterial: {
+      itemId: number;
+      templateType: number;
+      widgetTitle: string;
+      authorName: string;
+      statCollect: number;
+      widgetImage: string;
+      publishTime: number;
+      summary?: string;
+      authorRoute?: string;
+    };
+  };
+  "chinanews": {
+    id: string;
+    title: string;
+    url: string;
+    mobileUrl: string;
+    author: string;
+    content: string;
+    timestamp: number | undefined;
+    hot?: number | undefined;
+    cover?: string;
+  };
 };
