@@ -371,30 +371,37 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
     })
   );
 
-  return {
-    ...result,
-    updateTime: new Date().toLocaleString('zh-CN', {
-      timeZone: 'Asia/Shanghai',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    }).replace(/\//g, '-'),
-    data: eventsWithContent.map((v) => ({
-      id: v.id,
-      title: v.title,
-      content: v.content,
-      url: v.url,
-      mobileUrl: v.url || v.mobileUrl, // 确保有mobileUrl字段
-      timestamp: v.timestamp,
-      hot: v.hot || 0, // 提供默认值
-      cover: v.cover,
-      author: v.author,
-      eventDate: v.eventDate,
-      location: v.location
-    })),
-  };
+ return {
+  ...result,
+  updateTime: new Date().toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).replace(/\//g, '-'),
+  data: eventsWithContent.map((v) => ({
+    id: v.id,
+    title: v.title,
+    content: v.content, // 可选字段，直接赋值（接口允许 undefined）
+    url: v.url,
+    // 修复1：源数据无 mobileUrl，直接用 v.url 替代（避免 TS 报错，且确保是 string 类型）
+    mobileUrl: v.url,
+    // 修复2：timestamp 字符串转 number，失败设为 undefined（符合接口要求）
+    timestamp: typeof v.timestamp === 'string'
+      ? // 情况1：如果是时间字符串（如 "2025-11-23 10:00:00"）→ 转毫秒时间戳
+        new Date(v.timestamp).getTime()
+      : // 情况2：如果是数字 → 直接使用；否则 → undefined
+        (typeof v.timestamp === 'number' ? v.timestamp : undefined),
+    // 优化：hot 直接赋值（接口要求必填字段，值允许 undefined，无需 || undefined）
+    hot: v.hot,
+    cover: v.cover, // 可选字段
+    author: v.author, // 可选字段
+    eventDate: v.eventDate,
+    location: v.location
+  })),
+};
 };

@@ -1,4 +1,4 @@
-import type { RouterData, ListContext, Options, RouterResType } from "../types.js";
+import type { RouterData, ListContext, Options, RouterResType, ListItem } from "../types.js";
 import type { RouterType } from "../router.types.js";
 import { load } from "cheerio";
 import { get } from "../utils/getData.js";
@@ -92,7 +92,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
       };
     }
 
-    const data = list.map((item, index): RouterType["unn"] => {
+  const data: ListItem[] = list.map((item, index): ListItem => {
       // 提取文章内容 - 优先使用contentSnippet，然后是description
       let content = "";
 
@@ -144,7 +144,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
         author: author,
         content: content,
         timestamp: item.pubDate ? getTime(item.pubDate) : undefined,
-        hot: 0, // hot字段是必需的，设置为0
+        hot: 0, // hot 为必填，统一设为 0（无热度）
         cover: undefined,
       };
     });
@@ -197,11 +197,10 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
         hour12: false
       }).replace(/\//g, '-'),
       fromCache: result.fromCache || false,
-      data: filteredData,
+      data: filteredData, // 现在完全符合 ListItem[] 类型
     };
   } catch (error) {
     console.error(`获取unn新闻失败: ${type}`, error);
-
     return {
       updateTime: new Date().toLocaleString('zh-CN', {
         timeZone: 'Asia/Shanghai',
@@ -214,7 +213,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
         hour12: false
       }).replace(/\//g, '-'),
       fromCache: false,
-      data: [],
+      data: [], // 异常时返回空数组，符合 ListItem[] 类型
     };
   }
-};
+}

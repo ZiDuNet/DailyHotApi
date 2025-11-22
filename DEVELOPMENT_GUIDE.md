@@ -438,6 +438,212 @@ export type RouterType = {
 - 缓存参数正确传递到所有调用链
 - 更新数据时正确刷新缓存
 
+## ⚠️ TypeScript常见错误修复
+
+### 1. parseInt类型错误
+**问题**: `Argument of type 'string | number' is not assignable to parameter of type 'string'`
+
+**解决方案**:
+```typescript
+// ❌ 错误
+const daysNum = parseInt(days);
+
+// ✅ 正确
+const daysNum = parseInt(days as string);
+```
+
+**位置**: comnews.ts, eastmoney.ts, huanqiu.ts, wallstreetcn.ts, unn.ts 等所有使用parseInt的地方
+
+### 2. 字符串方法调用错误
+**问题**: `Property 'replace' does not exist on type 'string | string[]'`
+
+**解决方案**:
+```typescript
+// ❌ 错误 - content可能是数组
+content = content.replace(/<[^>]*>/g, '');
+
+// ✅ 正确 - 确保类型安全
+const contentStr = Array.isArray(content) ? content.join(' ') : String(content);
+const cleanedContent = contentStr.replace(/<[^>]*>/g, '');
+```
+
+**位置**: huanqiu.ts extractContent函数
+
+### 3. 属性访问错误
+**问题**: `Property 'description' does not exist on type`
+
+**解决方案**:
+```typescript
+// ❌ 错误 - 属性不在类型定义中
+if (item.description) { }
+
+// ✅ 正确 - 使用类型断言
+if ((item as any).description) { }
+```
+
+**位置**: unn.ts 访问description和creator属性
+
+### 4. hot字段必需性问题
+**问题**: `Property 'hot' is optional but required in type 'ListItem'`
+
+**解决方案**:
+```typescript
+// ❌ 错误 - hot是可选的
+hot: undefined,
+
+// ✅ 正确 - hot是必需的
+hot: 0,
+```
+
+**修复**: 修改 `src/types.d.ts` 中的ListItem接口：
+```typescript
+export interface ListItem {
+  // ...
+  hot: number; // 从 number | undefined 改为 number
+  // ...
+}
+```
+
+### 5. 数组toString问题
+**问题**: `Property 'toString' does not exist on type 'never'`
+
+**解决方案**:
+```typescript
+// ❌ 错误
+id = typeof item.guid === 'string' ? item.guid : item.guid.toString();
+
+// ✅ 正确
+id = typeof item.guid === 'string' ? item.guid : (item.guid as any).toString();
+```
+
+## 🔧 接口开发最佳实践
+
+### 1. 数据获取限制
+```typescript
+// ✅ 推荐的列表获取限制
+$(".content_list li").each((index, element) => {
+  if (index >= 50) return false; // 限制只获取前50条
+  // 处理逻辑...
+});
+```
+
+### 2. 并发控制
+```typescript
+// ✅ 推荐的并发控制
+const batchSize = 5; // 限制同时请求数量
+const articleDetails = [];
+
+for (let i = 0; i < articles.length; i += batchSize) {
+  const batch = articles.slice(i, i + batchSize);
+  const batchPromises = batch.map(async (article, index) => {
+    // 处理逻辑...
+  });
+
+  const batchResults = await Promise.all(batchPromises);
+  articleDetails.push(...(batchResults.filter(Boolean) as NonNullable<typeof batchResults[number]>[]));
+}
+```
+
+### 3. 时间处理优先级
+```typescript
+// ✅ 推荐的时间获取优先级
+const pubtimeText = $detail("#pubtime_baidu").text().trim();
+if (pubtimeText) {
+  // 1. 优先使用BaiduSpider中的标准ISO格式时间
+  timestamp = getTime(pubtimeText); // 格式: "2025-11-22 22:26:04"
+} else {
+  // 2. 备选：从可见文本中解析中文时间格式
+  const timeMatch = timeStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})/);
+  if (timeMatch) {
+    const date = new Date(year, month - 1, day, hour, minute);
+    timestamp = date.getTime();
+  }
+}
+```
+
+### 4. 请求头优化
+```typescript
+// ✅ 推荐的请求头配置
+const headers = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+  "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+  "Accept-Encoding": "gzip, deflate",
+  "Connection": "keep-alive",
+  "Referer": baseUrl, // 设置合适的Referer避免反爬
+};
+```
+
+## 🚀 性能优化指南
+
+### 1. 数据量控制
+- **列表获取**: 限制前50条，避免过载
+- **内容长度**: 详情内容限制1000字符
+- **并发控制**: 详情页获取每批5个请求
+
+### 2. 缓存策略
+- **列表页**: `noCache: true` (实时数据)
+- **详情页**: `noCache: false` (可用缓存)
+- **错误降级**: 失败时使用列表页简介
+
+### 3. 反爬虫应对
+- **完整User-Agent**: 模拟真实浏览器
+- **Referer设置**: 从列表页跳转
+- **请求间隔**: 控制并发请求频率
+- **错误重试**: 适度的重试机制
+
+## 🧪 测试和调试
+
+### 1. 本地开发
+```bash
+# 启动开发服务器
+npm run dev
+
+# 测试接口
+curl "http://localhost:6688/interface-name"
+curl "http://localhost:6688/interface-name?days=3"
+curl "http://localhost:6688/interface-name?type=some-type"
+```
+
+### 2. 构建验证
+```bash
+# 确保构建无错误
+npm run build
+
+# 检查类型错误
+npx tsc --noEmit
+```
+
+### 3. 调试技巧
+- **网络请求**: 使用浏览器开发者工具分析目标网站
+- **HTML解析**: 检查选择器是否正确匹配元素
+- **时间解析**: 验证时间格式和转换逻辑
+- **缓存问题**: 检查Redis连接和缓存命中
+
+## 📝 今日修复记录
+
+### 2025-11-22 修复内容
+1. **36氪科技频道** (`36kr-keji.ts`)
+   - 实现JSON数据解析（script async标签）
+   - 修复时间戳解析错误
+   - 添加类型定义
+
+2. **中新网国际和财经频道** (`chinanews.ts`)
+   - 实现列表页和内容页数据解析
+   - 优先使用BaiduSpider标准时间格式
+   - 添加并发控制和数据量限制
+
+3. **TypeScript编译错误**
+   - 修复parseInt类型转换错误（多处）
+   - 修复字符串方法类型检查（huanqiu.ts）
+   - 修复属性访问权限问题（unn.ts）
+   - 修复hot字段必需性问题
+
+4. **接口规范更新**
+   - 修改ListItem接口hot字段为必需
+   - 统一错误处理和降级策略
+   - 完善时间筛选逻辑
+
 ## 🔗 相关链接
 
 - [TypeScript 类型系统](https://www.typescriptlang.org/)

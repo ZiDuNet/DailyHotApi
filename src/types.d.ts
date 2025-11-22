@@ -12,7 +12,7 @@ export interface ListItem {
   author?: string;
   desc?: string;
   content?: string;
-  hot: number;
+  hot: number | undefined;
   timestamp: number | undefined;
   url: string;
   mobileUrl: string;
