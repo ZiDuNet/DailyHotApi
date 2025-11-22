@@ -388,9 +388,9 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
       title: v.title,
       content: v.content,
       url: v.url,
-      mobileUrl: v.url,
+      mobileUrl: v.url || v.mobileUrl, // 确保有mobileUrl字段
       timestamp: v.timestamp,
-      hot: v.hot,
+      hot: v.hot || 0, // 提供默认值
       cover: v.cover,
       author: v.author,
       eventDate: v.eventDate,

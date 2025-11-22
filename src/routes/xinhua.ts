@@ -415,7 +415,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
     }
 
     // 如果没有有效的时间字符串，使用原有的字符串过滤逻辑或URL过滤
-    return isDateInRange(timeString || '', item.url, days);
+    return isDateInRange(timeString ? String(timeString) : '', item.url, days);
   });
 
   return {
