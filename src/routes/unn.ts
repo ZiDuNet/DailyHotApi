@@ -98,9 +98,9 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
 
       if (item.contentSnippet) {
         content = item.contentSnippet;
-      } else if (item.description) {
+      } else if ((item as any).description) {
         // 从 description 中获取内容
-        const $ = load(item.description);
+        const $ = load((item as any).description);
         content = $.text().trim().replace(/\s+/g, ' ');
       }
 
@@ -117,10 +117,11 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
 
       // 提取作者信息
       let author = "unn";
-      if (item.creator) {
-        author = Array.isArray(item.creator) ? item.creator.join(', ') : item.creator;
+      if ((item as any).creator) {
+        const creator = (item as any).creator;
+        author = Array.isArray(creator) ? creator.join(', ') : String(creator);
       } else if (item.author) {
-        author = item.author;
+        author = String(item.author);
       }
 
       // 生成唯一ID
