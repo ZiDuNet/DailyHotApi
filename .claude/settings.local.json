@@ -18,7 +18,11 @@
       "Bash(node:*)",
       "WebFetch(domain:api-one-wscn.awtmt.com)",
       "Bash(36kr.html)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "WebFetch(domain:localhost)",
+      "Bash(tasklist:*)",
+      "Bash(git restore:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

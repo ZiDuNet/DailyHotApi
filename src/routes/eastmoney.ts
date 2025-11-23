@@ -65,6 +65,9 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
     const $ = load(listResult.data);
     const articles: any[] = [];
 
+    console.log(`Eastmoney - 列表页HTML长度: ${listResult.data.length}`);
+    console.log(`Eastmoney - 查找 .article_list li 元素数量: ${$(".article_list li").length}`);
+
     // 解析文章列表
     $(".article_list li").each((index, element) => {
       const $item = $(element);
@@ -84,6 +87,13 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
         });
       }
     });
+
+    console.log(`Eastmoney - 从列表页找到 ${articles.length} 篇文章`);
+    if (articles.length > 0) {
+      console.log(`Eastmoney - 第一篇文章标题: "${articles[0].title}"`);
+      console.log(`Eastmoney - 第一篇文章URL: "${articles[0].url}"`);
+      console.log(`Eastmoney - 第一篇文章时间: "${articles[0].timeStr}"`);
+    }
 
     // 获取文章详情（限制并发数量避免过载）
     const batchSize = 5;
@@ -124,9 +134,44 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
           // 提取作者信息
           const authorText = $detail(".infos .item:contains('作者')").text().replace(/作者：/, '').trim();
 
-          // 提取发布时间
-          const timeText = $detail(".infos .item:first").text().trim() || article.timeStr;
-          const timestamp = timeText ? getTime(timeText) : undefined;
+          // 提取发布时间 - 根据实际HTML结构调整选择器优先级
+          let timeText = $detail(".item").first().text().trim() ||
+                        $detail(".time.chaoxi_focus").text().trim() ||
+                        $detail(".item.chaoxi_focus").text().trim() ||
+                        $detail(".infos .item:first").text().trim() ||
+                        $detail(".time").text().trim() ||
+                        $detail(".publish-time").text().trim() ||
+                        $detail(".date").text().trim() ||
+                        article.timeStr;
+
+          // 清理时间文本，移除多余的前缀和空白
+          if (timeText) {
+            timeText = timeText.replace(/发布时间：|发布于|来源：|作者：/g, '').trim();
+            timeText = timeText.replace(/\s+/g, ' ');
+          }
+
+          // 添加调试输出
+          if (timeText) {
+            console.log(`Eastmoney - 提取到时间文本: "${timeText}"`);
+          }
+
+          let timestamp = undefined;
+          if (timeText) {
+            timestamp = getTime(timeText);
+            if (timestamp) {
+              console.log(`Eastmoney - 时间戳解析成功: ${timestamp} (${new Date(timestamp).toISOString()})`);
+            } else {
+              console.log(`Eastmoney - 时间戳解析失败，原始文本: "${timeText}"`);
+            }
+          } else if (article.timeStr) {
+            timestamp = getTime(article.timeStr);
+            if (timestamp) {
+              console.log(`Eastmoney - 使用列表时间解析成功: ${timestamp}`);
+            }
+          }
+
+          // 如果时间解析失败，返回 undefined
+          // 这样可以明确标识哪些文章没有时间信息
 
           return {
             id: `eastmoney_${index}_${Date.now()}`,
@@ -144,7 +189,15 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
 
           // 如果获取详情失败，返回基本信息
           const timeStr = article.timeStr;
-          const timestamp = timeStr ? getTime(timeStr) : undefined;
+          let timestamp = undefined;
+
+          // 尝试解析时间字符串，如果失败则使用当前时间
+          if (timeStr) {
+            timestamp = getTime(timeStr);
+          }
+
+          // 如果时间解析失败，返回 undefined
+          // 这样可以明确标识哪些文章没有时间信息
 
           return {
             id: `eastmoney_${index}_${Date.now()}`,

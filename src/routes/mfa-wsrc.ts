@@ -17,7 +17,8 @@ const urlMap: Record<string, string> = {
 
 export const handleRoute = async (c: ListContext, noCache: boolean) => {
   const type = c.req.query("type") || "wsrc";
-  const listData = await getList({ type }, noCache);
+  const days = c.req.query("days") || "today";
+  const listData = await getList({ type, days }, noCache);
   const routeData: RouterData = {
     name: "mfa-wsrc",
     title: type === "minister" ? "外交部长活动" : "外交部外事日程",
@@ -26,6 +27,15 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
       type: {
         name: "活动分类",
         type: typeMap,
+      },
+      days: {
+        name: "时间范围",
+        type: {
+          "today": "今天",
+          "3": "近三天",
+          "7": "近一周",
+          "30": "近一月",
+        },
       },
     },
     description: type === "minister"
@@ -51,11 +61,19 @@ const getEventContent = async (url: string, noCache: boolean = false): Promise<{
 
     const $ = load(result.data);
 
-    // 提取时间信息 - 使用用户指定的 class="time"
+    // 提取时间信息 - 根据实际结构 <p class="time"><span>2025-11-20 15:00</span></p>
     let time: string | undefined;
     const timeElement = $('.time').first();
     if (timeElement.length > 0) {
-      const timeText = timeElement.text().trim();
+      // 优先提取span标签内的时间
+      const timeSpan = timeElement.find('span').first();
+      let timeText = '';
+      if (timeSpan.length > 0) {
+        timeText = timeSpan.text().trim();
+      } else {
+        timeText = timeElement.text().trim();
+      }
+
       if (timeText && timeText.length > 5) {
         time = timeText;
       }
@@ -65,8 +83,16 @@ const getEventContent = async (url: string, noCache: boolean = false): Promise<{
     let title: string | undefined;
     const titleElement = $('.news-title').first();
     if (titleElement.length > 0) {
-      const titleText = titleElement.text().trim();
+      let titleText = titleElement.text().trim();
       if (titleText && titleText.length > 0) {
+        // 清理标题中的多余信息
+        titleText = titleText
+          .replace(/\n\s*\n/g, '\n')  // 移除多余的换行
+          .replace(/\s*\d{4}-\d{2}-\d{2}\s*\d{2}:\d{2}\s*/g, '')  // 移除时间信息
+          .replace(/\s*【中大小】\s*/g, '')  // 移除字体大小标记
+          .replace(/\s*打印\s*/g, '')  // 移除打印标记
+          .replace(/\s+/g, ' ')  // 合并多个空白字符
+          .trim();
         title = titleText;
       }
     }
@@ -142,7 +168,7 @@ const getEventContent = async (url: string, noCache: boolean = false): Promise<{
 };
 
 const getList = async (options: Options, noCache: boolean): Promise<RouterResType> => {
-  const { type = "wsrc" } = options;
+  const { type = "wsrc", days = "today" } = options;
   const url = urlMap[type] || urlMap.wsrc;
 
   const result = await get({
@@ -161,7 +187,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
   const $ = load(result.data);
 
   const events: Array<{
-    id: number;
+    id: string | number;
     title: string;
     url: string;
     eventDate?: string;
@@ -169,11 +195,11 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
 
   // 根据不同类型使用不同的选择器
   if (type === "wsrc") {
-    // 外事日程页面的结构
-    $('.newsList .newsBd .list1').each((_, listElement) => {
-      const $list = $(listElement);
+    // 外事日程页面的结构 - 直接从 .newsBd 获取内容
+    $('.newsBd').each((_, bdElement) => {
+      const $bd = $(bdElement);
 
-      $list.find('li').each((index, element) => {
+      $bd.find('li').each((index, element) => {
         const $element = $(element);
         const $link = $element.find('a');
 
@@ -184,10 +210,17 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
           if (fullTitle && href && fullTitle.length > 10) {
             // 从标题中提取日期（格式：标题（YYYY-MM-DD））
             const dateMatch = fullTitle.match(/\((\d{4}-\d{2}-\d{2})\)$/);
-            const eventDate = dateMatch ? dateMatch[1] : '';
+            let eventDate = dateMatch ? dateMatch[1] : '';
 
             // 移除日期部分，得到纯净的标题
             const title = fullTitle.replace(/\s*\(\d{4}-\d{2}-\d{2}\)$/, '');
+
+            // 从URL中提取文章ID（格式：t20251120_11756780）
+            let articleId = '';
+            const idMatch = href.match(/\/(t\d{8}_\d+)\.shtml/);
+            if (idMatch) {
+              articleId = idMatch[1];
+            }
 
             // 处理URL
             let fullUrl = href;
@@ -199,8 +232,11 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
               fullUrl = `https://www.mfa.gov.cn/web/wjdt_674879/wsrc_674883/${href}`;
             }
 
+            // 使用文章ID作为主要标识符
+            const uniqueId = articleId || `mfa-${type}-${index + 1}-${Date.now()}`;
+
             events.push({
-              id: index + 1,
+              id: uniqueId,
               title,
               url: fullUrl,
               eventDate,
@@ -210,21 +246,34 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
       });
     });
   } else if (type === "minister") {
-    // 部长活动页面结构 - 使用 class="newsList"
-    $('.newsList').each((_, listElement) => {
-      const $listContainer = $(listElement);
+    // 部长活动页面结构 - 也使用 .newsBd 获取内容
+    $('.newsBd').each((_, bdElement) => {
+      const $bd = $(bdElement);
 
-      // 查找所有的li元素
-      $listContainer.find('li').each((index, element) => {
+      $bd.find('li').each((index, element) => {
         const $element = $(element);
-        const $link = $element.find('a').first();
+        const $link = $element.find('a');
 
         if ($link.length > 0) {
-          const title = $link.text().trim();
+          const fullTitle = $link.text().trim();
           const href = $link.attr('href');
 
-          if (title && href && title.length > 10) {
-            // 处理URL格式: ./202511/t20251121_11757970.shtml
+          if (fullTitle && href && fullTitle.length > 10) {
+            // 从标题中提取日期（格式：标题（YYYY-MM-DD））
+            const dateMatch = fullTitle.match(/\((\d{4}-\d{2}-\d{2})\)$/);
+            let eventDate = dateMatch ? dateMatch[1] : '';
+
+            // 移除日期部分，得到纯净的标题
+            const title = fullTitle.replace(/\s*\(\d{4}-\d{2}-\d{2}\)$/, '');
+
+            // 从URL中提取文章ID（格式：t20251120_11756780）
+            let articleId = '';
+            const idMatch = href.match(/\/(t\d{8}_\d+)\.shtml/);
+            if (idMatch) {
+              articleId = idMatch[1];
+            }
+
+            // 处理URL - 部长活动页面路径不同
             let fullUrl = href;
             if (href.startsWith('./')) {
               fullUrl = `https://www.mfa.gov.cn/web/wjdt_674879/wjbxw_674885/${href.replace('./', '')}`;
@@ -235,26 +284,22 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
             }
 
             // 尝试从URL中提取日期，格式：./202511/t20251121_11757970.shtml
-            let eventDate = '';
-            const urlDateMatch = href.match(/\.\/(\d{6})\/t(\d{8})_/);
-            if (urlDateMatch && urlDateMatch[2]) {
-              const dateStr = urlDateMatch[2];
-              if (dateStr.length === 8) {
-                eventDate = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`;
+            if (!eventDate) {
+              const urlDateMatch = href.match(/\.\/(\d{6})\/t(\d{8})_/);
+              if (urlDateMatch && urlDateMatch[2]) {
+                const dateStr = urlDateMatch[2];
+                if (dateStr.length === 8) {
+                  eventDate = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`;
+                }
               }
             }
 
-            // 如果URL中没有提取到日期，尝试从标题中提取
-            if (!eventDate) {
-              const titleDateMatch = title.match(/\((\d{4}-\d{2}-\d{2})\)/);
-              if (titleDateMatch) {
-                eventDate = titleDateMatch[1];
-              }
-            }
+            // 使用文章ID作为主要标识符
+            const uniqueId = articleId || `mfa-${type}-${index + 1}-${Date.now()}`;
 
             events.push({
-              id: index + 1,
-              title: title.replace(/\s*\(\d{4}-\d{2}-\d{2}\)$/, ''),
+              id: uniqueId,
+              title,
               url: fullUrl,
               eventDate,
             });
@@ -290,7 +335,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
           }
 
           events.push({
-            id: index + 1,
+            id: `mfa-${type}-fallback-${index + 1}-${Date.now()}`, // 生成唯一组合ID
             title: title.replace(/\s*\(\d{4}-\d{2}-\d{2}\)$/, ''),
             url: fullUrl,
             eventDate,
@@ -325,7 +370,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
         }
 
         events.push({
-          id: index + 1,
+          id: `mfa-${type}-last-resort-${index + 1}-${Date.now()}`, // 生成唯一组合ID
           title: cleanTitle,
           url: fullUrl,
           eventDate,
@@ -335,6 +380,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
   }
 
   console.log(`找到 ${events.length} 条外事日程`);
+  console.log('事件样例:', events.slice(0, 2));
 
   // 去重并限制数量
   const uniqueEvents = Array.from(
@@ -371,6 +417,42 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
     })
   );
 
+  // 按时间过滤：根据days参数过滤外事活动
+  const filteredData = eventsWithContent.filter(item => {
+    if (!item.timestamp) {
+      return true; // 如果没有时间戳，默认通过
+    }
+
+    const itemDate = new Date(item.timestamp);
+    const now = new Date();
+    let targetDate: Date;
+
+    switch (days) {
+      case "today":
+        targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case "3":
+        targetDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+        break;
+      case "7":
+        targetDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "30":
+        targetDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        // 如果是数字，按天计算
+        const daysNum = parseInt(days as string);
+        if (!isNaN(daysNum) && daysNum > 0) {
+          targetDate = new Date(now.getTime() - daysNum * 24 * 60 * 60 * 1000);
+        } else {
+          targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        }
+    }
+
+    return itemDate >= targetDate;
+  });
+
  return {
   ...result,
   updateTime: new Date().toLocaleString('zh-CN', {
@@ -383,7 +465,7 @@ const getList = async (options: Options, noCache: boolean): Promise<RouterResTyp
     second: '2-digit',
     hour12: false
   }).replace(/\//g, '-'),
-  data: eventsWithContent.map((v) => ({
+  data: filteredData.map((v) => ({
     id: v.id,
     title: v.title,
     content: v.content, // 可选字段，直接赋值（接口允许 undefined）

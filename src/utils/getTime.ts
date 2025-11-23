@@ -72,6 +72,21 @@ export const getTime = (timeInput: string | number): number | undefined => {
             .valueOf();
         }
 
+        // 处理 完整年月日+时间
+        if (/^\d{4}年\d{1,2}月\d{1,2}日\s+\d{2}:\d{2}$/.test(timeInput)) {
+          const [datePart, timePart] = timeInput.split(" ");
+          const [year, month, day] = datePart.replace("年", "-").replace("月", "-").replace("日", "").split("-").map(Number);
+          const [hour, minute] = timePart.split(":").map(Number);
+          return dayjs()
+            .year(year)
+            .month(month - 1)
+            .date(day)
+            .hour(hour)
+            .minute(minute)
+            .second(0)
+            .valueOf();
+        }
+
         // 处理相对时间
         if (/今天/.test(timeInput)) {
           const timeStr = timeInput.replace("今天", "").trim();
