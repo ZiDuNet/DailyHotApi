@@ -1,4 +1,13 @@
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(customParseFormat);
+// 统一使用东八区
+dayjs.tz.setDefault("Asia/Shanghai");
 
 interface CurrentDateTime {
   year: string;
@@ -24,7 +33,7 @@ export const getTime = (timeInput: string | number): number | undefined => {
       num = Number(timeInput);
 
       if (isNaN(num)) {
-        const now = dayjs();
+  const now = dayjs().tz("Asia/Shanghai");
 
         // 处理 "00:00"
         if (/^\d{2}:\d{2}$/.test(timeInput)) {
@@ -77,7 +86,7 @@ export const getTime = (timeInput: string | number): number | undefined => {
           const [datePart, timePart] = timeInput.split(" ");
           const [year, month, day] = datePart.replace("年", "-").replace("月", "-").replace("日", "").split("-").map(Number);
           const [hour, minute] = timePart.split(":").map(Number);
-          return dayjs()
+          return dayjs().tz("Asia/Shanghai")
             .year(year)
             .month(month - 1)
             .date(day)
@@ -90,7 +99,7 @@ export const getTime = (timeInput: string | number): number | undefined => {
         // 处理相对时间
         if (/今天/.test(timeInput)) {
           const timeStr = timeInput.replace("今天", "").trim();
-          return dayjs()
+          return dayjs().tz("Asia/Shanghai")
             .set("hour", parseInt(timeStr.split(":")[0]))
             .set("minute", parseInt(timeStr.split(":")[1]))
             .valueOf();
@@ -98,7 +107,7 @@ export const getTime = (timeInput: string | number): number | undefined => {
 
         if (/昨天/.test(timeInput)) {
           const timeStr = timeInput.replace("昨天", "").trim();
-          return dayjs()
+          return dayjs().tz("Asia/Shanghai")
             .subtract(1, "day")
             .set("hour", parseInt(timeStr.split(":")[0]))
             .set("minute", parseInt(timeStr.split(":")[1]))
@@ -108,12 +117,12 @@ export const getTime = (timeInput: string | number): number | undefined => {
         // 处理 `N 小时前` 的时间格式
         if (/小时前/.test(timeInput)) {
           const hoursAgo = parseInt(timeInput.replace("小时前", ""));
-          return dayjs().subtract(hoursAgo, "hour").valueOf();
+          return dayjs().tz("Asia/Shanghai").subtract(hoursAgo, "hour").valueOf();
         }
 
         if (/分钟前/.test(timeInput)) {
           const minutesAgo = parseInt(timeInput.replace("分钟前", ""));
-          return dayjs().subtract(minutesAgo, "minute").valueOf();
+          return dayjs().tz("Asia/Shanghai").subtract(minutesAgo, "minute").valueOf();
         }
 
         // 处理为标准格式
@@ -133,19 +142,32 @@ export const getTime = (timeInput: string | number): number | undefined => {
           "YYYY-MM-DD",
         ];
 
-        let parsedDate: dayjs.Dayjs | undefined = undefined;
-        for (const pattern of formatPatterns) {
-          parsedDate = dayjs(standardizedInput, pattern, true);
-          if (parsedDate.isValid()) {
-            break;
-          }
+        // 将标准化字符串转为东八区 ISO 字符串，确保按 +08:00 解析
+        const toShanghaiISO = (input: string): string => {
+          const parts = input.split(" ");
+          const datePart = parts[0];
+          let timePart = parts[1] || "00:00:00";
+          if (/^\d{2}:\d{2}$/.test(timePart)) timePart = `${timePart}:00`;
+          else if (/^\d{2}$/.test(timePart)) timePart = `${timePart}:00:00`;
+          return `${datePart}T${timePart}+08:00`;
+        };
+
+        const isoInput = toShanghaiISO(standardizedInput);
+        const zoned = dayjs(isoInput);
+        if (zoned.isValid()) {
+          return zoned.valueOf();
         }
 
-        if (parsedDate && parsedDate.isValid()) {
-          return parsedDate.valueOf();
-        } else {
-          return 0;
+        // 兜底：尝试格式化解析再转换为东八区
+        for (const pattern of formatPatterns) {
+          const d = dayjs(standardizedInput, pattern, true);
+          if (d.isValid()) {
+            // 将解析结果视为本地时间，转换到东八区
+            const converted = dayjs(`${d.format("YYYY-MM-DD")}T${d.format("HH:mm:ss")}+08:00`);
+            if (converted.isValid()) return converted.valueOf();
+          }
         }
+        return 0;
       }
     } else {
       num = timeInput;
@@ -169,7 +191,7 @@ export const getTime = (timeInput: string | number): number | undefined => {
  * @returns 当前日期时间
  */
 export const getCurrentDateTime = (padZero: boolean = false): CurrentDateTime => {
-  const now = dayjs();
+  const now = dayjs().tz("Asia/Shanghai");
 
   // 补零
   const pad = (num: number): string => (num < 10 ? `0${num}` : `${num}`);
