@@ -125,6 +125,13 @@ export const getTime = (timeInput: string | number): number | undefined => {
           return dayjs().tz("Asia/Shanghai").subtract(minutesAgo, "minute").valueOf();
         }
 
+        // 首先尝试直接解析各种格式，包括 RFC 2822 格式
+        const directParse = dayjs(timeInput);
+        if (directParse.isValid()) {
+          // 转换到东八区
+          return directParse.tz("Asia/Shanghai").valueOf();
+        }
+
         // 处理为标准格式
         let standardizedInput = timeInput
           .replace(/(\d{4})-(\d{2})-(\d{2})-(\d{2})/, "$1-$2-$3 $4") // "YYYY-MM-DD-HH" -> "YYYY-MM-DD HH"
